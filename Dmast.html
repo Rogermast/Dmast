@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dmast</title>
+  <title>Dmast – v1.0</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -23,7 +23,6 @@
     button { color: white; }
     .btn-device { background: #3498db; }
     .btn-location { background: #2ecc71; }
-    .btn-manual { background: #1abc9c; }
     .btn-save { background: #27ae60; }
     .btn-load { background: #2980b9; }
     .btn-export { background: #e67e22; }
@@ -42,14 +41,10 @@
     .status { margin-top: 15px; padding: 12px; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px; font-size: 14px; line-height: 1.5; }
     .alert-warning { background: #fff8e1; border-left-color: #ffc107; color: #5d4037; }
     .device-icon { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 6px; }
-    #projectNotesField {
-      width: 100%; padding: 10px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc;
-      font-family: inherit; font-size: 14px;
-    }
   </style>
 </head>
 <body>
-  <h1>Dmast</h1>
+  <h1>Dmast – v1.0</h1>
   <div class="toolbar">
     <label for="deviceType">Tipo:</label>
     <select id="deviceType">
@@ -59,24 +54,15 @@
       <option value="monitor">Monitor/NVR</option>
     </select>
     <button class="btn-device" onclick="addPointByClick()">📍 Agregar punto (clic)</button>
-    <button class="btn-location" onclick="addCurrentLocationPoint()">🛰️ Ubicación GPS</button>
-    <button class="btn-manual" onclick="toggleManualCoords()">📝 Coordenadas manuales</button>
+    <button class="btn-location" onclick="addCurrentLocationPoint()">📍 Ubicación en tiempo real</button>
     <button class="btn-route" id="btnRouteControl" onclick="toggleRouteWorkflow()">IGHL️ Iniciar ruta</button>
     <button class="btn-delete" onclick="deleteSelected()">🗑️ Borrar punto</button>
-    <button class="btn-delete" onclick="deleteLastRoute()">🗑️ Borrar última ruta</button> <!-- ✅ RESTAURADO -->
+    <button class="btn-delete" onclick="deleteLastRoute()">🗑️ Borrar última ruta</button>
     <button class="btn-notes" onclick="editProjectNotes()">📝 Notas adicionales</button>
     <button class="btn-save" onclick="saveProject()">💾 Guardar proyecto</button>
     <button class="btn-load" onclick="loadProject()">📂 Cargar proyecto</button>
     <button class="btn-export" onclick="exportToExcel()">📤 Exportar Excel</button>
     <button class="btn-export" onclick="exportToKMZ()">🌍 Exportar KMZ</button>
-  </div>
-
-  <div id="manualCoordsPanel" style="display:none; background:white; padding:16px; border-radius:12px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-    <h4 style="margin-bottom:10px;">Coordenadas manuales</h4>
-    <label>Lat: <input type="number" step="any" id="manualLat" placeholder="Ej: -12.0464"></label>
-    <label>Lng: <input type="number" step="any" id="manualLng" placeholder="Ej: -77.0428"></label>
-    <button class="btn-manual" onclick="addPointFromManual()">Agregar</button>
-    <button class="btn-delete" style="margin-left:8px;" onclick="toggleManualCoords()">Cancelar</button>
   </div>
 
   <div id="map"></div>
@@ -114,7 +100,7 @@
 
   <div class="status" id="statusBar">
     • Haz clic en el mapa para agregar puntos.<br>
-    • Usa "Iniciar ruta" para delimitar el perímetro.
+    • Usa "Ubicación en tiempo real" para marcar tu posición actual con nota.
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -161,9 +147,9 @@
         return;
       }
       const type = document.getElementById('deviceType').value;
-      const nombre = prompt("Nombre del sitio (ej: C1, SW1, M1):", "");
+      const nombre = prompt("Nombre del sitio (ej: C1, SW1):", "");
       if (!nombre) return;
-      const comentario = prompt("Comentario:", "");
+      const comentario = prompt("Comentario/Nota:", "");
       addPoint(e.latlng.lat, e.latlng.lng, type, nombre, comentario);
     }
 
@@ -250,6 +236,41 @@
       input.click();
     }
 
+    // === UBICACIÓN EN TIEMPO REAL (renombrado y mejorado) ===
+    function addCurrentLocationPoint() {
+      const isSecure = location.protocol === 'https:' ||
+                        location.hostname === 'localhost' ||
+                        location.hostname === '127.0.0.1';
+      if (!isSecure) {
+        alert("📍 Para usar la ubicación en móvil, necesitas HTTPS.\n💡 Usa GitHub Pages, ngrok, o un servidor seguro.");
+        return;
+      }
+      if (!navigator.geolocation) {
+        alert("Tu navegador no soporta geolocalización.");
+        return;
+      }
+
+      const type = document.getElementById('deviceType').value;
+      const nombre = prompt("Nombre del sitio (ej: C1):", "");
+      if (!nombre) return;
+      const comentario = prompt("Comentario/Nota para este punto:", "");
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          addPoint(pos.coords.latitude, pos.coords.longitude, type, nombre, comentario);
+          map.setView([pos.coords.latitude, pos.coords.longitude], 17);
+        },
+        (err) => {
+          let msg = "❌ No se pudo obtener tu ubicación.\n";
+          if (err.code === err.PERMISSION_DENIED) msg += "• No diste permiso.";
+          else if (err.code === err.POSITION_UNAVAILABLE) msg += "• Activa el GPS.";
+          else msg += "• Error desconocido.";
+          alert(msg);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+
     // === FLUJO DE RUTA ===
     function toggleRouteWorkflow() {
       const btn = document.getElementById('btnRouteControl');
@@ -325,9 +346,8 @@
       return nearest;
     }
 
-    // ✅ FUNCIÓN RESTAURADA: Borrar última ruta
+    // ✅ Borrar última ruta
     function deleteLastRoute() {
-      // Primero: si hay ruta en progreso (no finalizada)
       if (currentRouteLatLngs.length > 0) {
         if (currentRoutePolyline) map.removeLayer(currentRoutePolyline);
         currentRouteLatLngs = [];
@@ -335,7 +355,6 @@
         updateStatusBar("🗑️ Ruta en progreso descartada.");
         return;
       }
-      // Segundo: si hay rutas finalizadas
       if (routes.length === 0) {
         alert("No hay rutas para borrar.");
         return;
@@ -343,12 +362,11 @@
       const lastRoute = routes.pop();
       map.removeLayer(lastRoute.polyline);
       if (lastRoute.distanceLabel) map.removeLayer(lastRoute.distanceLabel);
-      // Si tiene handles (en versiones anteriores), también se eliminarían
       renderRoutesTable();
       updateStatusBar(`🗑️ Ruta ${lastRoute.name} eliminada.`);
     }
 
-    // === Notas adicionales ===
+    // === Notas del proyecto ===
     function editProjectNotes() {
       const notes = prompt("Notas adicionales del proyecto:", projectNotes);
       if (notes !== null) {
@@ -358,43 +376,6 @@
     }
 
     // === Renderizado ===
-    function renderPointsTable() { /* ... igual que v2.4 ... */ }
-    function renderRoutesTable() {
-      const tbody = document.getElementById('routes-body');
-      tbody.innerHTML = '';
-      routes.forEach(r => {
-        const row = tbody.insertRow();
-        row.innerHTML = `
-          <td>${r.id}</td>
-          <td>${r.name}</td>
-          <td>${r.distance} m</td>
-          <td><button class="btn-device" onclick="zoomToRoute(${r.id})">🔍 Ver en mapa</button></td>
-        `;
-      });
-    }
-
-    function zoomToRoute(routeId) {
-      const route = routes.find(r => r.id === routeId);
-      if (route) {
-        const group = L.featureGroup([route.polyline]);
-        map.fitBounds(group.getBounds().pad(0.2));
-      }
-    }
-
-    function selectPoint(id) { /* ... igual ... */ }
-    function deleteSelected() { /* ... igual ... */ }
-    function toggleManualCoords() { /* ... igual ... */ }
-    function addPointFromManual() { /* ... igual ... */ }
-    function addCurrentLocationPoint() { /* ... igual ... */ }
-    function saveProject() { /* ... igual ... */ }
-    function loadProject() { /* ... igual ... */ }
-    function exportToExcel() { /* ... igual ... */ }
-    function exportToKMZ() { /* ... igual ... */ }
-    function updateStatusBar(text) {
-      document.getElementById('statusBar').innerHTML = text;
-    }
-
-    // === Render shortcuts para mantener el archivo compacto ===
     function renderPointsTable() {
       const tbody = document.getElementById('points-body');
       tbody.innerHTML = '';
@@ -422,6 +403,28 @@
       });
     }
 
+    function renderRoutesTable() {
+      const tbody = document.getElementById('routes-body');
+      tbody.innerHTML = '';
+      routes.forEach(r => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+          <td>${r.id}</td>
+          <td>${r.name}</td>
+          <td>${r.distance} m</td>
+          <td><button class="btn-device" onclick="zoomToRoute(${r.id})">🔍 Ver en mapa</button></td>
+        `;
+      });
+    }
+
+    function zoomToRoute(routeId) {
+      const route = routes.find(r => r.id === routeId);
+      if (route) {
+        const group = L.featureGroup([route.polyline]);
+        map.fitBounds(group.getBounds().pad(0.2));
+      }
+    }
+
     function selectPoint(id) {
       if (selectedPointId !== null) {
         const old = points.find(p => p.id === selectedPointId);
@@ -445,59 +448,21 @@
       updateStatusBar("🗑️ Punto eliminado.");
     }
 
-    function toggleManualCoords() {
-      const panel = document.getElementById('manualCoordsPanel');
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-
-    function addPointFromManual() {
-      const lat = parseFloat(document.getElementById('manualLat').value);
-      const lng = parseFloat(document.getElementById('manualLng').value);
-      if (isNaN(lat) || isNaN(lng)) return alert("Coordenadas inválidas.");
-      const type = document.getElementById('deviceType').value;
-      const nombre = prompt("Nombre (ej: C1):", "");
-      if (!nombre) return;
-      const comentario = prompt("Comentario:", "");
-      addPoint(lat, lng, type, nombre, comentario);
-      toggleManualCoords();
-      document.getElementById('manualLat').value = '';
-      document.getElementById('manualLng').value = '';
-    }
-
-    function addCurrentLocationPoint() {
-      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-      if (!isSecure) {
-        alert("Necesitas HTTPS (GitHub Pages) para GPS en móvil.");
-        return;
-      }
-      const type = document.getElementById('deviceType').value;
-      const nombre = prompt("Nombre (ej: C1):", "");
-      if (!nombre) return;
-      const comentario = prompt("Comentario:", "");
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          addPoint(pos.coords.latitude, pos.coords.longitude, type, nombre, comentario);
-          map.setView([pos.coords.latitude, pos.coords.longitude], 17);
-        },
-        (err) => alert("No se pudo obtener ubicación."),
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    }
-
+    // === Persistencia y exportación ===
     function saveProject() {
       const name = prompt("Nombre del proyecto:", "");
       if (!name) return;
       const pointData = points.map(p => ({ id: p.id, type: p.type, lat: p.lat, lng: p.lng, nombre: p.nombre, comentario: p.comentario, image1: p.image1, image2: p.image2 }));
       const routeData = routes.map(r => ({ id: r.id, name: r.name, distance: r.distance, latlngs: r.polyline.getLatLngs().map(ll => [ll.lat, ll.lng]) }));
       const project = { points: pointData, routes: routeData, notes: projectNotes };
-      localStorage.setItem(`Dmast${name}`, JSON.stringify(project));
+      localStorage.setItem(`dmast_v1_0_${name}`, JSON.stringify(project));
       alert(`✅ Proyecto "${name}" guardado.`);
     }
 
     function loadProject() {
       const name = prompt("Nombre del proyecto a cargar:", "");
       if (!name) return;
-      const dataStr = localStorage.getItem(`Dmast${name}`);
+      const dataStr = localStorage.getItem(`dmast_v1_0_${name}`);
       if (!dataStr) return alert("Proyecto no encontrado.");
       try {
         const project = JSON.parse(dataStr);
@@ -551,16 +516,15 @@
         "Imagen 1": p.image1 || "",
         "Imagen 2": p.image2 || ""
       }));
-      const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Puntos");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "Puntos");
       if (routes.length > 0) {
         const routeSheet = XLSX.utils.json_to_sheet(routes.map(r => ({ "ID Ruta": r.id, "Nombre": r.name, "Distancia (m)": r.distance })));
         XLSX.utils.book_append_sheet(wb, routeSheet, "Rutas");
       }
       const notesSheet = XLSX.utils.json_to_sheet([{ "Notas del proyecto": projectNotes || "Sin notas" }]);
       XLSX.utils.book_append_sheet(wb, notesSheet, "Notas");
-      XLSX.writeFile(wb, "Dmast.xlsx");
+      XLSX.writeFile(wb, "Dmast_V1_0.xlsx");
     }
 
     function exportToKMZ() {
@@ -568,7 +532,7 @@
       let kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
-<name>Dmast</name>
+<name>Dmast v1.0</name>
 <description><![CDATA[Notas del proyecto:<br>${projectNotes || 'Ninguna'}]]></description>
 `;
       points.forEach(p => {
@@ -587,7 +551,11 @@
       kml += `</Document></kml>`;
       const zip = new JSZip();
       zip.file("doc.kml", kml);
-      zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "Dmast.kmz"));
+      zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "Dmast_V1_0.kmz"));
+    }
+
+    function updateStatusBar(text) {
+      document.getElementById('statusBar').innerHTML = text;
     }
 
     window.onload = () => {
@@ -597,7 +565,7 @@
       const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
       if (!isSecure) {
         updateStatusBar(`
-          ⚠️ <strong>Ubicación GPS desactivada</strong><br>
+          ⚠️ <strong>Ubicación en tiempo real desactivada</strong><br>
           Usa <strong>GitHub Pages</strong> (HTTPS) para activarla en móvil.
         `);
         document.getElementById('statusBar').className = "status alert-warning";
