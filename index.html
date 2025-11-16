@@ -3,45 +3,52 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dmast – v1.2</title>
+  <title>Dmast – v1.3</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { background: #f5f7fa; padding: 20px; color: #333; }
     h1, h2 { text-align: center; margin: 15px 0; color: #2c3e50; }
 
-    /* === Vista A: toolbar horizontal === */
+    /* Layout común */
+    .main-layout {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+      align-items: flex-start;
+    }
     .toolbar-horizontal {
-      display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding: 16px;
+      display: flex; flex-wrap: wrap; gap: 12px; padding: 16px;
       background: white; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);
       align-items: center;
       justify-content: flex-start;
-    }
-
-    /* === Vista B: barra lateral === */
-    .layout-vertical {
-      display: flex; gap: 20px; margin-bottom: 20px;
+      margin-bottom: 20px;
     }
     .sidebar {
       width: 240px;
       background: white; padding: 16px; border-radius: 12px;
       box-shadow: 0 3px 10px rgba(0,0,0,0.1);
       display: flex; flex-direction: column; gap: 10px;
-      align-items: stretch;
       flex-shrink: 0;
     }
-    .sidebar button, .sidebar select {
-      width: 100%;
+    .map-container {
+      flex: 1;
+      height: 500px;
+      min-width: 0;
     }
-    .map-container { flex: 1; }
+    #map { height: 100%; width: 100%; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
 
-    /* Estilos comunes */
     label { font-weight: bold; margin-right: 8px; color: #2c3e50; display: block; margin-bottom: 6px; }
-    select, button, input[type="text"] {
+    select, button {
       padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;
       transition: all 0.2s; font-size: 14px;
+      width: 100%;
     }
-    select, input[type="text"] { background: #f1f1f1; color: #333; }
+    .sidebar select, .sidebar button { width: 100%; }
+    .toolbar-horizontal select, .toolbar-horizontal button {
+      width: auto;
+    }
+    select { background: #f1f1f1; color: #333; }
     button { color: white; }
     .btn-device { background: #3498db; }
     .btn-location { background: #2ecc71; }
@@ -54,7 +61,6 @@
     .btn-notes { background: #9b59b6; }
     .btn-toggle-view { background: #1abc9c; }
 
-    #map { height: 500px; width: 100%; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
     table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.1); margin-bottom: 25px; }
     th { background: #34495e; color: white; padding: 12px; text-align: left; }
     td { padding: 12px; border-bottom: 1px solid #eee; }
@@ -70,35 +76,32 @@
   </style>
 </head>
 <body>
-  <h1>Dmast – v1.2</h1>
+  <h1>Dmast – v1.3</h1>
 
-  <!-- Contenedor que cambia según la vista -->
-  <div id="toolbar-container">
-    <!-- Vista A (por defecto) -->
-    <div class="toolbar-horizontal" id="toolbarA">
-      <label for="deviceType">Tipo:</label>
-      <select id="deviceType">
-        <option value="camera">Cámara</option>
-        <option value="speaker">Parlante IP</option>
-        <option value="switch">Switch</option>
-        <option value="monitor">Monitor/NVR</option>
-      </select>
-      <button class="btn-device" onclick="addPointByClick()">📍 Agregar punto (clic)</button>
-      <button class="btn-location" onclick="addCurrentLocationPoint()">📍 Ubicación en tiempo real</button>
-      <button class="btn-route" id="btnRouteControl" onclick="toggleRouteWorkflow()">IGHL️ Iniciar ruta</button>
-      <button class="btn-delete" onclick="deleteSelected()">🗑️ Borrar punto</button>
-      <button class="btn-delete" onclick="deleteLastRoute()">🗑️ Borrar última ruta</button>
-      <button class="btn-notes" onclick="editProjectNotes()">📝 Notas adicionales</button>
-      <button class="btn-save" onclick="saveProjectToFile()">💾 Guardar proyecto (.json)</button>
-      <button class="btn-load" onclick="document.getElementById('fileInput').click()">📂 Cargar proyecto</button>
-      <button class="btn-export" onclick="exportToExcel()">📤 Exportar Excel</button>
-      <button class="btn-export" onclick="exportToKMZ()">🌍 Exportar KMZ</button>
-      <button class="btn-toggle-view" onclick="toggleView()">🔄 Vista B</button>
-    </div>
+  <!-- Vista A: toolbar arriba -->
+  <div class="toolbar-horizontal" id="toolbarA">
+    <label for="deviceType">Tipo:</label>
+    <select id="deviceType">
+      <option value="camera">Cámara</option>
+      <option value="speaker">Parlante IP</option>
+      <option value="switch">Switch</option>
+      <option value="monitor">Monitor/NVR</option>
+    </select>
+    <button class="btn-device" onclick="addPointByClick()">📍 Agregar punto (clic)</button>
+    <button class="btn-location" onclick="addCurrentLocationPoint()">📍 Ubicación en tiempo real</button>
+    <button class="btn-route" id="btnRouteControl" onclick="toggleRouteWorkflow()">IGHL️ Iniciar ruta</button>
+    <button class="btn-delete" onclick="deleteSelected()">🗑️ Borrar punto</button>
+    <button class="btn-delete" onclick="deleteLastRoute()">🗑️ Borrar última ruta</button>
+    <button class="btn-notes" onclick="editProjectNotes()">📝 Notas adicionales</button>
+    <button class="btn-save" onclick="saveProjectToFile()">💾 Guardar proyecto (.json)</button>
+    <button class="btn-load" onclick="document.getElementById('fileInput').click()">📂 Cargar proyecto</button>
+    <button class="btn-export" onclick="exportToExcel()">📤 Exportar Excel</button>
+    <button class="btn-export" onclick="exportToKMZ()">🌍 Exportar KMZ</button>
+    <button class="btn-toggle-view" onclick="toggleView()">🔄 Vista B</button>
   </div>
 
-  <!-- Vista B (oculta por defecto) -->
-  <div class="layout-vertical" id="layoutB" style="display:none;">
+  <!-- Vista B: sidebar + mapa -->
+  <div class="main-layout" id="layoutB" style="display:none;">
     <div class="sidebar">
       <label for="deviceTypeB">Tipo:</label>
       <select id="deviceTypeB">
@@ -119,12 +122,15 @@
       <button class="btn-export" onclick="exportToKMZ()">🌍 Exportar KMZ</button>
       <button class="btn-toggle-view" onclick="toggleView()">🔄 Vista A</button>
     </div>
+    <!-- El mapa está AQUÍ, no se mueve -->
     <div class="map-container">
       <div id="map"></div>
     </div>
   </div>
 
-  <!-- Input oculto para carga de archivos -->
+  <!-- En Vista A, el mapa se muestra AQUÍ -->
+  <div class="map-container" id="mapContainerA"></div>
+
   <input type="file" id="fileInput" accept=".json" onchange="loadProjectFromFile(event)">
 
   <h2>Puntos del sistema</h2>
@@ -163,14 +169,12 @@
     • Guarda y carga proyectos como archivos .json desde tu equipo.
   </div>
 
-  <!-- Librerías -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
   <script>
-    // === ESTADO GLOBAL ===
     const TIPOS = {
       camera: { label: "Cámara", abbr: "C", color: "#f1c40f" },
       speaker: { label: "Parlante IP", abbr: "P", color: "#9b59b6" },
@@ -182,15 +186,43 @@
     let routes = [];
     let nextId = 1;
     let nextRouteId = 1;
-    let map, markersLayer, routesLayer;
+    let map = null;
+    let markersLayer, routesLayer;
     let selectedPointId = null;
     let currentRouteLatLngs = [];
     let currentRoutePolyline = null;
     let routeWorkflowActive = false;
     let projectNotes = "";
-    let currentView = 'A'; // 'A' o 'B'
+    let currentView = 'A';
 
-    // === Sincronización de selectores ===
+    // === Cambio de vista SIN destruir el mapa ===
+    function toggleView() {
+      const toolbarA = document.getElementById('toolbarA');
+      const layoutB = document.getElementById('layoutB');
+      const mapContainerA = document.getElementById('mapContainerA');
+      const mapDiv = document.getElementById('map');
+
+      if (currentView === 'A') {
+        // Mover mapa a Vista B
+        document.querySelector('.map-container').appendChild(mapDiv);
+        toolbarA.style.display = 'none';
+        layoutB.style.display = 'flex';
+        currentView = 'B';
+        document.querySelector('#layoutB .btn-toggle-view').textContent = '🔄 Vista A';
+      } else {
+        // Mover mapa a Vista A
+        mapContainerA.appendChild(mapDiv);
+        layoutB.style.display = 'none';
+        toolbarA.style.display = 'flex';
+        currentView = 'A';
+        document.querySelector('#toolbarA .btn-toggle-view').textContent = '🔄 Vista B';
+      }
+      // Forzar actualización de tamaño
+      if (map) {
+        setTimeout(() => map.invalidateSize(), 100);
+      }
+    }
+
     function syncDeviceType() {
       if (currentView === 'A') {
         document.getElementById('deviceTypeB').value = document.getElementById('deviceType').value;
@@ -199,40 +231,13 @@
       }
     }
 
-    // === Cambio de vista ===
-    function toggleView() {
-      const toolbarA = document.getElementById('toolbarA');
-      const layoutB = document.getElementById('layoutB');
-      const btnA = toolbarA.querySelector('.btn-toggle-view');
-      const btnB = layoutB.querySelector('.btn-toggle-view');
-
-      if (currentView === 'A') {
-        // Cambiar a Vista B
-        syncDeviceType();
-        toolbarA.style.display = 'none';
-        layoutB.style.display = 'flex';
-        currentView = 'B';
-        btnB.textContent = '🔄 Vista A';
-        map.invalidateSize();
-      } else {
-        // Cambiar a Vista A
-        syncDeviceType();
-        layoutB.style.display = 'none';
-        toolbarA.style.display = 'block';
-        currentView = 'A';
-        btnA.textContent = '🔄 Vista B';
-        map.invalidateSize();
-      }
-    }
-
-    // === UTILS: obtener tipo actual ===
     function getCurrentDeviceType() {
       return currentView === 'A' 
         ? document.getElementById('deviceType').value 
         : document.getElementById('deviceTypeB').value;
     }
 
-    // === Inicialización del mapa ===
+    // === Inicialización del mapa (única) ===
     function initMap() {
       map = L.map('map').setView([4.6097, -74.0817], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -243,6 +248,7 @@
       map.on('click', handleMapClick);
     }
 
+    // === RESTO DE FUNCIONES (sin cambios en lógica) ===
     function handleMapClick(e) {
       if (routeWorkflowActive) {
         currentRouteLatLngs.push(e.latlng);
@@ -342,7 +348,6 @@
       input.click();
     }
 
-    // === UBICACIÓN EN TIEMPO REAL ===
     function addCurrentLocationPoint() {
       const isSecure = location.protocol === 'https:' ||
                         location.hostname === 'localhost' ||
@@ -377,7 +382,6 @@
       );
     }
 
-    // === Resto de funciones (sin cambios en lógica) ===
     function toggleRouteWorkflow() {
       const btn = currentView === 'A' ? document.getElementById('btnRouteControl') : document.getElementById('btnRouteControlB');
       if (!routeWorkflowActive) {
@@ -637,7 +641,7 @@
         }
         const notesSheet = XLSX.utils.json_to_sheet([{ "Notas del proyecto": projectNotes || "Sin notas" }]);
         XLSX.utils.book_append_sheet(wb, notesSheet, "Notas");
-        XLSX.writeFile(wb, "Dmast_V1_2.xlsx");
+        XLSX.writeFile(wb, "Dmast_V1_3.xlsx");
       } catch (err) {
         console.error("Error en exportación:", err);
         alert("❌ No se pudo generar el archivo Excel.");
@@ -649,7 +653,7 @@
       let kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
-<name>Dmast v1.2</name>
+<name>Dmast v1.3</name>
 <description><![CDATA[Notas del proyecto:<br>${projectNotes || 'Ninguna'}]]></description>
 `;
       points.forEach(p => {
@@ -668,7 +672,7 @@
       kml += `</Document></kml>`;
       const zip = new JSZip();
       zip.file("doc.kml", kml);
-      zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "Dmast_V1_2.kmz"));
+      zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "Dmast_V1_3.kmz"));
     }
 
     function updateStatusBar(text) {
