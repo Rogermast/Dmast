@@ -3,14 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dmast – v1.3</title>
+  <title>Dmast – v1.4</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { background: #f5f7fa; padding: 20px; color: #333; }
     h1, h2 { text-align: center; margin: 15px 0; color: #2c3e50; }
 
-    /* Layout común */
     .main-layout {
       display: flex;
       gap: 20px;
@@ -76,9 +75,8 @@
   </style>
 </head>
 <body>
-  <h1>Dmast – v1.3</h1>
+  <h1>Dmast – v1.4</h1>
 
-  <!-- Vista A: toolbar arriba -->
   <div class="toolbar-horizontal" id="toolbarA">
     <label for="deviceType">Tipo:</label>
     <select id="deviceType">
@@ -86,6 +84,8 @@
       <option value="speaker">Parlante IP</option>
       <option value="switch">Switch</option>
       <option value="monitor">Monitor/NVR</option>
+      <option value="antenna">Antena</option>
+      <option value="solar">Panel Solar</option>
     </select>
     <button class="btn-device" onclick="addPointByClick()">📍 Agregar punto (clic)</button>
     <button class="btn-location" onclick="addCurrentLocationPoint()">📍 Ubicación en tiempo real</button>
@@ -100,7 +100,6 @@
     <button class="btn-toggle-view" onclick="toggleView()">🔄 Vista B</button>
   </div>
 
-  <!-- Vista B: sidebar + mapa -->
   <div class="main-layout" id="layoutB" style="display:none;">
     <div class="sidebar">
       <label for="deviceTypeB">Tipo:</label>
@@ -109,6 +108,8 @@
         <option value="speaker">Parlante IP</option>
         <option value="switch">Switch</option>
         <option value="monitor">Monitor/NVR</option>
+        <option value="antenna">Antena</option>
+        <option value="solar">Panel Solar</option>
       </select>
       <button class="btn-device" onclick="addPointByClick()">📍 Agregar punto (clic)</button>
       <button class="btn-location" onclick="addCurrentLocationPoint()">📍 Ubicación en tiempo real</button>
@@ -122,13 +123,11 @@
       <button class="btn-export" onclick="exportToKMZ()">🌍 Exportar KMZ</button>
       <button class="btn-toggle-view" onclick="toggleView()">🔄 Vista A</button>
     </div>
-    <!-- El mapa está AQUÍ, no se mueve -->
     <div class="map-container">
       <div id="map"></div>
     </div>
   </div>
 
-  <!-- En Vista A, el mapa se muestra AQUÍ -->
   <div class="map-container" id="mapContainerA"></div>
 
   <input type="file" id="fileInput" accept=".json" onchange="loadProjectFromFile(event)">
@@ -166,7 +165,7 @@
 
   <div class="status" id="statusBar">
     • Haz clic en el mapa para agregar puntos.<br>
-    • Guarda y carga proyectos como archivos .json desde tu equipo.
+    • Nuevos tipos: Antena y Panel Solar.
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -175,11 +174,14 @@
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
   <script>
+    // === Nuevos tipos: ANTENA y PANEL SOLAR ===
     const TIPOS = {
       camera: { label: "Cámara", abbr: "C", color: "#f1c40f" },
       speaker: { label: "Parlante IP", abbr: "P", color: "#9b59b6" },
       switch: { label: "Switch", abbr: "SW", color: "#3498db" },
-      monitor: { label: "Monitor/NVR", abbr: "M", color: "#2c3e50" }
+      monitor: { label: "Monitor/NVR", abbr: "M", color: "#2c3e50" },
+      antenna: { label: "Antena", abbr: "A", color: "#27ae60" },
+      solar: { label: "Panel Solar", abbr: "PS", color: "#f39c12" }
     };
 
     let points = [];
@@ -195,7 +197,6 @@
     let projectNotes = "";
     let currentView = 'A';
 
-    // === Cambio de vista SIN destruir el mapa ===
     function toggleView() {
       const toolbarA = document.getElementById('toolbarA');
       const layoutB = document.getElementById('layoutB');
@@ -203,24 +204,19 @@
       const mapDiv = document.getElementById('map');
 
       if (currentView === 'A') {
-        // Mover mapa a Vista B
         document.querySelector('.map-container').appendChild(mapDiv);
         toolbarA.style.display = 'none';
         layoutB.style.display = 'flex';
         currentView = 'B';
         document.querySelector('#layoutB .btn-toggle-view').textContent = '🔄 Vista A';
       } else {
-        // Mover mapa a Vista A
         mapContainerA.appendChild(mapDiv);
         layoutB.style.display = 'none';
         toolbarA.style.display = 'flex';
         currentView = 'A';
         document.querySelector('#toolbarA .btn-toggle-view').textContent = '🔄 Vista B';
       }
-      // Forzar actualización de tamaño
-      if (map) {
-        setTimeout(() => map.invalidateSize(), 100);
-      }
+      if (map) setTimeout(() => map.invalidateSize(), 100);
     }
 
     function syncDeviceType() {
@@ -237,7 +233,6 @@
         : document.getElementById('deviceTypeB').value;
     }
 
-    // === Inicialización del mapa (única) ===
     function initMap() {
       map = L.map('map').setView([4.6097, -74.0817], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -248,7 +243,6 @@
       map.on('click', handleMapClick);
     }
 
-    // === RESTO DE FUNCIONES (sin cambios en lógica) ===
     function handleMapClick(e) {
       if (routeWorkflowActive) {
         currentRouteLatLngs.push(e.latlng);
@@ -259,7 +253,7 @@
         return;
       }
       const type = getCurrentDeviceType();
-      const nombre = prompt("Nombre del sitio (ej: C1, SW1):", "");
+      const nombre = prompt("Nombre del sitio (ej: C1, A1, PS1):", "");
       if (!nombre) return;
       const comentario = prompt("Comentario/Nota:", "");
       addPoint(e.latlng.lat, e.latlng.lng, type, nombre, comentario);
@@ -362,7 +356,7 @@
       }
 
       const type = getCurrentDeviceType();
-      const nombre = prompt("Nombre del sitio (ej: C1):", "");
+      const nombre = prompt("Nombre del sitio (ej: A1, PS1):", "");
       if (!nombre) return;
       const comentario = prompt("Comentario/Nota para este punto:", "");
 
@@ -619,8 +613,13 @@
       reader.readAsText(file);
     }
 
+    // === ✅ CORRECCIÓN DE EXPORTACIÓN A EXCEL ===
     function exportToExcel() {
-      if (points.length === 0) return alert("No hay puntos para exportar.");
+      if (points.length === 0) {
+        alert("No hay puntos para exportar.");
+        return;
+      }
+
       try {
         const data = points.map(p => ({
           ID: p.id,
@@ -632,19 +631,37 @@
           "Imagen 1": p.image1 || "",
           "Imagen 2": p.image2 || ""
         }));
+
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Puntos");
+
         if (routes.length > 0) {
           const routeSheet = XLSX.utils.json_to_sheet(routes.map(r => ({ "ID Ruta": r.id, "Nombre": r.name, "Distancia (m)": r.distance })));
           XLSX.utils.book_append_sheet(wb, routeSheet, "Rutas");
         }
+
         const notesSheet = XLSX.utils.json_to_sheet([{ "Notas del proyecto": projectNotes || "Sin notas" }]);
         XLSX.utils.book_append_sheet(wb, notesSheet, "Notas");
-        XLSX.writeFile(wb, "Dmast_V1_3.xlsx");
+
+        // ✅ Método robusto: detectar soporte
+        if (typeof XLSX.writeFile === 'function') {
+          XLSX.writeFile(wb, "Dmast_V1_4.xlsx");
+        } else {
+          // Respaldo manual
+          const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+          const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = "Dmast_V1_4.xlsx";
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        updateStatusBar("✅ Archivo Excel generado correctamente.");
       } catch (err) {
-        console.error("Error en exportación:", err);
-        alert("❌ No se pudo generar el archivo Excel.");
+        console.error("Error en exportación Excel:", err);
+        alert("❌ Falló la exportación. Prueba en otro navegador.");
       }
     }
 
@@ -653,7 +670,7 @@
       let kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
-<name>Dmast v1.3</name>
+<name>Dmast v1.4</name>
 <description><![CDATA[Notas del proyecto:<br>${projectNotes || 'Ninguna'}]]></description>
 `;
       points.forEach(p => {
@@ -672,7 +689,7 @@
       kml += `</Document></kml>`;
       const zip = new JSZip();
       zip.file("doc.kml", kml);
-      zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "Dmast_V1_3.kmz"));
+      zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "Dmast_V1_4.kmz"));
     }
 
     function updateStatusBar(text) {
