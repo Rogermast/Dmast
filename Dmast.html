@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dmast</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background: #f5f7fa; padding: 20px; color: #333; }
+    h1, h2 { text-align: center; margin: 15px 0; color: #2c3e50; }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding: 16px;
+      background: white; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+      align-items: center;
+    }
+    label { font-weight: bold; margin-right: 8px; color: #2c3e50; }
+    select, button, input[type="text"] {
+      padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;
+      transition: all 0.2s; font-size: 14px;
+    }
+    select, input[type="text"] { background: #f1f1f1; color: #333; }
+    button { color: white; }
+    .btn-device { background: #3498db; }
+    .btn-location { background: #2ecc71; }
+    .btn-manual { background: #1abc9c; }
+    .btn-save { background: #27ae60; }
+    .btn-load { background: #2980b9; }
+    .btn-export { background: #e67e22; }
+    .btn-delete { background: #e74c3c; font-size: 12px; padding: 6px 10px; }
+    .btn-route { background: #8e44ad; }
+    .btn-route.danger { background: #c0392b; }
+    .btn-notes { background: #9b59b6; }
+    #map { height: 500px; width: 100%; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.1); margin-bottom: 25px; }
+    th { background: #34495e; color: white; padding: 12px; text-align: left; }
+    td { padding: 12px; border-bottom: 1px solid #eee; }
+    tr:last-child td { border-bottom: none; }
+    tr.selected { background: #e8f5e9 !important; }
+    tr:hover { background: #f9fbfd; }
+    .thumb { width: 50px; height: 40px; object-fit: cover; border: 1px solid #ddd; border-radius: 4px; }
+    .status { margin-top: 15px; padding: 12px; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px; font-size: 14px; line-height: 1.5; }
+    .alert-warning { background: #fff8e1; border-left-color: #ffc107; color: #5d4037; }
+    .device-icon { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 6px; }
+    #projectNotesField {
+      width: 100%; padding: 10px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc;
+      font-family: inherit; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Dmast</h1>
+  <div class="toolbar">
+    <label for="deviceType">Tipo:</label>
+    <select id="deviceType">
+      <option value="camera">Cámara</option>
+      <option value="speaker">Parlante IP</option>
+      <option value="switch">Switch</option>
+      <option value="monitor">Monitor/NVR</option>
+    </select>
+    <button class="btn-device" onclick="addPointByClick()">📍 Agregar punto (clic)</button>
+    <button class="btn-location" onclick="addCurrentLocationPoint()">🛰️ Ubicación GPS</button>
+    <button class="btn-manual" onclick="toggleManualCoords()">📝 Coordenadas manuales</button>
+    <button class="btn-route" id="btnRouteControl" onclick="toggleRouteWorkflow()">IGHL️ Iniciar ruta</button>
+    <button class="btn-delete" onclick="deleteSelected()">🗑️ Borrar punto</button>
+    <button class="btn-delete" onclick="deleteLastRoute()">🗑️ Borrar última ruta</button> <!-- ✅ RESTAURADO -->
+    <button class="btn-notes" onclick="editProjectNotes()">📝 Notas adicionales</button>
+    <button class="btn-save" onclick="saveProject()">💾 Guardar proyecto</button>
+    <button class="btn-load" onclick="loadProject()">📂 Cargar proyecto</button>
+    <button class="btn-export" onclick="exportToExcel()">📤 Exportar Excel</button>
+    <button class="btn-export" onclick="exportToKMZ()">🌍 Exportar KMZ</button>
+  </div>
+
+  <div id="manualCoordsPanel" style="display:none; background:white; padding:16px; border-radius:12px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+    <h4 style="margin-bottom:10px;">Coordenadas manuales</h4>
+    <label>Lat: <input type="number" step="any" id="manualLat" placeholder="Ej: -12.0464"></label>
+    <label>Lng: <input type="number" step="any" id="manualLng" placeholder="Ej: -77.0428"></label>
+    <button class="btn-manual" onclick="addPointFromManual()">Agregar</button>
+    <button class="btn-delete" style="margin-left:8px;" onclick="toggleManualCoords()">Cancelar</button>
+  </div>
+
+  <div id="map"></div>
+
+  <h2>Puntos del sistema</h2>
+  <table id="points-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Tipo</th>
+        <th>Nombre</th>
+        <th>Lat</th>
+        <th>Lng</th>
+        <th>Comentario</th>
+        <th>Img1</th>
+        <th>Img2</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="points-body"></tbody>
+  </table>
+
+  <h2>Rutas perimetrales</h2>
+  <table id="routes-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Distancia (m)</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="routes-body"></tbody>
+  </table>
+
+  <div class="status" id="statusBar">
+    • Haz clic en el mapa para agregar puntos.<br>
+    • Usa "Iniciar ruta" para delimitar el perímetro.
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+  <script>
+    const TIPOS = {
+      camera: { label: "Cámara", abbr: "C", color: "#f1c40f" },
+      speaker: { label: "Parlante IP", abbr: "P", color: "#9b59b6" },
+      switch: { label: "Switch", abbr: "SW", color: "#3498db" },
+      monitor: { label: "Monitor/NVR", abbr: "M", color: "#2c3e50" }
+    };
+
+    let points = [];
+    let routes = [];
+    let nextId = 1;
+    let nextRouteId = 1;
+    let map, markersLayer, routesLayer;
+    let selectedPointId = null;
+    let currentRouteLatLngs = [];
+    let currentRoutePolyline = null;
+    let routeWorkflowActive = false;
+    let projectNotes = "";
+
+    function initMap() {
+      map = L.map('map').setView([4.6097, -74.0817], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+      routesLayer = L.layerGroup().addTo(map);
+      map.on('click', handleMapClick);
+    }
+
+    function handleMapClick(e) {
+      if (routeWorkflowActive) {
+        currentRouteLatLngs.push(e.latlng);
+        if (currentRoutePolyline) map.removeLayer(currentRoutePolyline);
+        if (currentRouteLatLngs.length >= 2) {
+          currentRoutePolyline = L.polyline(currentRouteLatLngs, { color: '#8e44ad', weight: 4, dashArray: '6,6' }).addTo(map);
+        }
+        return;
+      }
+      const type = document.getElementById('deviceType').value;
+      const nombre = prompt("Nombre del sitio (ej: C1, SW1, M1):", "");
+      if (!nombre) return;
+      const comentario = prompt("Comentario:", "");
+      addPoint(e.latlng.lat, e.latlng.lng, type, nombre, comentario);
+    }
+
+    function getIcon(type, selected = false) {
+      const color = TIPOS[type]?.color || '#7f8c8d';
+      const border = selected ? '3px solid #27ae60' : '2px solid white';
+      return L.divIcon({
+        html: `<div style="background:${color}; width:20px; height:20px; border-radius:50%; border:${border}; box-shadow:0 0 6px rgba(0,0,0,0.5);"></div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10]
+      });
+    }
+
+    function addPoint(lat, lng, type, nombre, comentario) {
+      let finalLat = lat, finalLng = lng;
+      const newPoint = L.latLng(lat, lng);
+      let snapApplied = false;
+      for (const route of routes) {
+        if (route.finalized) {
+          const latlngs = route.polyline.getLatLngs();
+          for (let i = 0; i < latlngs.length - 1; i++) {
+            const proj = projectPointToSegment(newPoint, latlngs[i], latlngs[i + 1]);
+            const dist = newPoint.distanceTo(proj);
+            if (dist <= 15) {
+              finalLat = proj.lat;
+              finalLng = proj.lng;
+              snapApplied = true;
+              break;
+            }
+          }
+          if (snapApplied) break;
+        }
+      }
+
+      const id = nextId++;
+      const marker = L.marker([finalLat, finalLng], {
+        icon: getIcon(type, id === selectedPointId),
+        draggable: true
+      })
+        .addTo(markersLayer)
+        .on('dragend', () => {
+          const pos = marker.getLatLng();
+          const point = points.find(p => p.id === id);
+          if (point) {
+            point.lat = pos.lat;
+            point.lng = pos.lng;
+            renderPointsTable();
+          }
+        })
+        .on('click', () => selectPoint(id));
+
+      points.push({ id, type, lat: finalLat, lng: finalLng, nombre, comentario, image1: null, image2: null, marker });
+      renderPointsTable();
+      if (snapApplied) updateStatusBar("✅ Punto alineado al perímetro más cercano.");
+    }
+
+    function projectPointToSegment(p, v, w) {
+      const l2 = v.distanceTo(w) ** 2;
+      if (l2 === 0) return v;
+      let t = ((p.lat - v.lat) * (w.lat - v.lat) + (p.lng - v.lng) * (w.lng - v.lng)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return L.latLng(v.lat + t * (w.lat - v.lat), v.lng + t * (w.lng - v.lng));
+    }
+
+    function captureImage(pointId, slot) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment';
+      input.onchange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const point = points.find(p => p.id === pointId);
+          if (point) {
+            point[slot] = ev.target.result;
+            renderPointsTable();
+            updateStatusBar(`📷 Imagen ${slot === 'image1' ? '1' : '2'} guardada.`);
+          }
+        };
+        reader.readAsDataURL(file);
+        setTimeout(() => { input.value = ""; }, 100);
+      };
+      input.click();
+    }
+
+    // === FLUJO DE RUTA ===
+    function toggleRouteWorkflow() {
+      const btn = document.getElementById('btnRouteControl');
+      if (!routeWorkflowActive) {
+        routeWorkflowActive = true;
+        currentRouteLatLngs = [];
+        btn.textContent = "✅ Finalizar ruta";
+        btn.classList.add('danger');
+        updateStatusBar("IGHL️ Haz clic en el mapa para dibujar el perímetro.");
+      } else {
+        if (currentRouteLatLngs.length < 2) {
+          alert("La ruta debe tener al menos 2 puntos.");
+          return;
+        }
+        finalizeCurrentRoute();
+        routeWorkflowActive = false;
+        btn.textContent = "IGHL️ Iniciar ruta";
+        btn.classList.remove('danger');
+        updateStatusBar("✅ Ruta perimetral finalizada.");
+      }
+    }
+
+    function finalizeCurrentRoute() {
+      const polyline = L.polyline(currentRouteLatLngs, { color: '#8e44ad', weight: 4 }).addTo(routesLayer);
+      let total = 0;
+      for (let i = 0; i < currentRouteLatLngs.length - 1; i++) {
+        total += currentRouteLatLngs[i].distanceTo(currentRouteLatLngs[i + 1]);
+      }
+      const distance = total.toFixed(1);
+
+      let routeName = `Ruta ${nextRouteId}`;
+      if (points.length >= 2) {
+        const start = currentRouteLatLngs[0];
+        const end = currentRouteLatLngs[currentRouteLatLngs.length - 1];
+        const p1 = findNearestPoint(start, 20);
+        const p2 = findNearestPoint(end, 20);
+        if (p1 && p2 && p1.id !== p2.id) {
+          routeName = `${p1.nombre}–${p2.nombre}`;
+        } else if (p1) {
+          routeName = `${p1.nombre}–?`;
+        } else if (p2) {
+          routeName = `?–${p2.nombre}`;
+        }
+      }
+
+      const id = nextRouteId++;
+      routes.push({ id, name: routeName, polyline, distance, finalized: true });
+
+      const mid = currentRouteLatLngs[Math.floor(currentRouteLatLngs.length / 2)];
+      L.marker(mid, {
+        icon: L.divIcon({
+          html: `<div style="background:#8e44ad; color:white; padding:3px 8px; border-radius:12px; font-size:12px; font-weight:bold;">${distance} m</div>`,
+          className: 'distance-label'
+        })
+      }).addTo(routesLayer);
+
+      if (currentRoutePolyline) map.removeLayer(currentRoutePolyline);
+      currentRouteLatLngs = [];
+      currentRoutePolyline = null;
+      renderRoutesTable();
+    }
+
+    function findNearestPoint(latlng, maxMeters) {
+      let nearest = null;
+      let minDist = Infinity;
+      for (const p of points) {
+        const dist = latlng.distanceTo(L.latLng(p.lat, p.lng));
+        if (dist <= maxMeters && dist < minDist) {
+          minDist = dist;
+          nearest = p;
+        }
+      }
+      return nearest;
+    }
+
+    // ✅ FUNCIÓN RESTAURADA: Borrar última ruta
+    function deleteLastRoute() {
+      // Primero: si hay ruta en progreso (no finalizada)
+      if (currentRouteLatLngs.length > 0) {
+        if (currentRoutePolyline) map.removeLayer(currentRoutePolyline);
+        currentRouteLatLngs = [];
+        currentRoutePolyline = null;
+        updateStatusBar("🗑️ Ruta en progreso descartada.");
+        return;
+      }
+      // Segundo: si hay rutas finalizadas
+      if (routes.length === 0) {
+        alert("No hay rutas para borrar.");
+        return;
+      }
+      const lastRoute = routes.pop();
+      map.removeLayer(lastRoute.polyline);
+      if (lastRoute.distanceLabel) map.removeLayer(lastRoute.distanceLabel);
+      // Si tiene handles (en versiones anteriores), también se eliminarían
+      renderRoutesTable();
+      updateStatusBar(`🗑️ Ruta ${lastRoute.name} eliminada.`);
+    }
+
+    // === Notas adicionales ===
+    function editProjectNotes() {
+      const notes = prompt("Notas adicionales del proyecto:", projectNotes);
+      if (notes !== null) {
+        projectNotes = notes;
+        updateStatusBar("📝 Notas actualizadas.");
+      }
+    }
+
+    // === Renderizado ===
+    function renderPointsTable() { /* ... igual que v2.4 ... */ }
+    function renderRoutesTable() {
+      const tbody = document.getElementById('routes-body');
+      tbody.innerHTML = '';
+      routes.forEach(r => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+          <td>${r.id}</td>
+          <td>${r.name}</td>
+          <td>${r.distance} m</td>
+          <td><button class="btn-device" onclick="zoomToRoute(${r.id})">🔍 Ver en mapa</button></td>
+        `;
+      });
+    }
+
+    function zoomToRoute(routeId) {
+      const route = routes.find(r => r.id === routeId);
+      if (route) {
+        const group = L.featureGroup([route.polyline]);
+        map.fitBounds(group.getBounds().pad(0.2));
+      }
+    }
+
+    function selectPoint(id) { /* ... igual ... */ }
+    function deleteSelected() { /* ... igual ... */ }
+    function toggleManualCoords() { /* ... igual ... */ }
+    function addPointFromManual() { /* ... igual ... */ }
+    function addCurrentLocationPoint() { /* ... igual ... */ }
+    function saveProject() { /* ... igual ... */ }
+    function loadProject() { /* ... igual ... */ }
+    function exportToExcel() { /* ... igual ... */ }
+    function exportToKMZ() { /* ... igual ... */ }
+    function updateStatusBar(text) {
+      document.getElementById('statusBar').innerHTML = text;
+    }
+
+    // === Render shortcuts para mantener el archivo compacto ===
+    function renderPointsTable() {
+      const tbody = document.getElementById('points-body');
+      tbody.innerHTML = '';
+      points.forEach(p => {
+        const row = document.createElement('tr');
+        row.dataset.id = p.id;
+        const color = TIPOS[p.type]?.color || '#7f8c8d';
+        row.innerHTML = `
+          <td>${p.id}</td>
+          <td><span class="device-icon" style="background:${color};"></span> ${TIPOS[p.type]?.label || p.type}</td>
+          <td>${p.nombre}</td>
+          <td>${p.lat.toFixed(6)}</td>
+          <td>${p.lng.toFixed(6)}</td>
+          <td>${p.comentario || "—"}</td>
+          <td>${p.image1 ? `<img src="${p.image1}" class="thumb">` : '—'}</td>
+          <td>${p.image2 ? `<img src="${p.image2}" class="thumb">` : '—'}</td>
+          <td>
+            <button class="btn-delete" style="font-size:11px;padding:4px 6px;" onclick="captureImage(${p.id},'image1')">📷 Img1</button>
+            <button class="btn-delete" style="font-size:11px;padding:4px 6px;" onclick="captureImage(${p.id},'image2')">📷 Img2</button>
+          </td>
+        `;
+        row.onclick = () => selectPoint(p.id);
+        if (p.id === selectedPointId) row.classList.add('selected');
+        tbody.appendChild(row);
+      });
+    }
+
+    function selectPoint(id) {
+      if (selectedPointId !== null) {
+        const old = points.find(p => p.id === selectedPointId);
+        if (old) old.marker.setIcon(getIcon(old.type, false));
+      }
+      selectedPointId = id;
+      const point = points.find(p => p.id === id);
+      if (point) point.marker.setIcon(getIcon(point.type, true));
+      renderPointsTable();
+    }
+
+    function deleteSelected() {
+      if (selectedPointId === null) return alert("Selecciona un punto.");
+      const index = points.findIndex(p => p.id === selectedPointId);
+      if (index !== -1) {
+        map.removeLayer(points[index].marker);
+        points.splice(index, 1);
+      }
+      selectedPointId = null;
+      renderPointsTable();
+      updateStatusBar("🗑️ Punto eliminado.");
+    }
+
+    function toggleManualCoords() {
+      const panel = document.getElementById('manualCoordsPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function addPointFromManual() {
+      const lat = parseFloat(document.getElementById('manualLat').value);
+      const lng = parseFloat(document.getElementById('manualLng').value);
+      if (isNaN(lat) || isNaN(lng)) return alert("Coordenadas inválidas.");
+      const type = document.getElementById('deviceType').value;
+      const nombre = prompt("Nombre (ej: C1):", "");
+      if (!nombre) return;
+      const comentario = prompt("Comentario:", "");
+      addPoint(lat, lng, type, nombre, comentario);
+      toggleManualCoords();
+      document.getElementById('manualLat').value = '';
+      document.getElementById('manualLng').value = '';
+    }
+
+    function addCurrentLocationPoint() {
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!isSecure) {
+        alert("Necesitas HTTPS (GitHub Pages) para GPS en móvil.");
+        return;
+      }
+      const type = document.getElementById('deviceType').value;
+      const nombre = prompt("Nombre (ej: C1):", "");
+      if (!nombre) return;
+      const comentario = prompt("Comentario:", "");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          addPoint(pos.coords.latitude, pos.coords.longitude, type, nombre, comentario);
+          map.setView([pos.coords.latitude, pos.coords.longitude], 17);
+        },
+        (err) => alert("No se pudo obtener ubicación."),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+
+    function saveProject() {
+      const name = prompt("Nombre del proyecto:", "");
+      if (!name) return;
+      const pointData = points.map(p => ({ id: p.id, type: p.type, lat: p.lat, lng: p.lng, nombre: p.nombre, comentario: p.comentario, image1: p.image1, image2: p.image2 }));
+      const routeData = routes.map(r => ({ id: r.id, name: r.name, distance: r.distance, latlngs: r.polyline.getLatLngs().map(ll => [ll.lat, ll.lng]) }));
+      const project = { points: pointData, routes: routeData, notes: projectNotes };
+      localStorage.setItem(`Dmast${name}`, JSON.stringify(project));
+      alert(`✅ Proyecto "${name}" guardado.`);
+    }
+
+    function loadProject() {
+      const name = prompt("Nombre del proyecto a cargar:", "");
+      if (!name) return;
+      const dataStr = localStorage.getItem(`Dmast${name}`);
+      if (!dataStr) return alert("Proyecto no encontrado.");
+      try {
+        const project = JSON.parse(dataStr);
+        markersLayer.clearLayers();
+        routesLayer.clearLayers();
+        points = []; routes = []; nextId = 1; nextRouteId = 1;
+        currentRouteLatLngs = []; currentRoutePolyline = null; routeWorkflowActive = false;
+        projectNotes = project.notes || "";
+        document.getElementById('btnRouteControl').textContent = "IGHL️ Iniciar ruta";
+        document.getElementById('btnRouteControl').classList.remove('danger');
+
+        project.points.forEach(p => addPoint(p.lat, p.lng, p.type, p.nombre, p.comentario));
+        points.forEach((p, i) => {
+          if (project.points[i].id) points[i].id = project.points[i].id;
+          if (project.points[i].image1) points[i].image1 = project.points[i].image1;
+          if (project.points[i].image2) points[i].image2 = project.points[i].image2;
+          if (points[i].id >= nextId) nextId = points[i].id + 1;
+        });
+
+        project.routes.forEach(r => {
+          const latlngs = r.latlngs.map(ll => L.latLng(ll[0], ll[1]));
+          const polyline = L.polyline(latlngs, { color: '#8e44ad', weight: 4 }).addTo(routesLayer);
+          routes.push({ id: r.id, name: r.name, polyline, distance: r.distance, finalized: true });
+          const mid = latlngs[Math.floor(latlngs.length / 2)];
+          L.marker(mid, {
+            icon: L.divIcon({
+              html: `<div style="background:#8e44ad; color:white; padding:3px 8px; border-radius:12px; font-size:12px; font-weight:bold;">${r.distance} m</div>`,
+              className: 'distance-label'
+            })
+          }).addTo(routesLayer);
+          if (r.id >= nextRouteId) nextRouteId = r.id + 1;
+        });
+        renderPointsTable();
+        renderRoutesTable();
+        alert(`✅ Proyecto "${name}" cargado.`);
+      } catch (e) {
+        console.error(e);
+        alert("❌ Error al cargar.");
+      }
+    }
+
+    function exportToExcel() {
+      if (points.length === 0) return alert("No hay puntos.");
+      const data = points.map(p => ({
+        ID: p.id,
+        Tipo: TIPOS[p.type]?.label || p.type,
+        Nombre: p.nombre,
+        Latitud: p.lat,
+        Longitud: p.lng,
+        Comentario: p.comentario,
+        "Imagen 1": p.image1 || "",
+        "Imagen 2": p.image2 || ""
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Puntos");
+      if (routes.length > 0) {
+        const routeSheet = XLSX.utils.json_to_sheet(routes.map(r => ({ "ID Ruta": r.id, "Nombre": r.name, "Distancia (m)": r.distance })));
+        XLSX.utils.book_append_sheet(wb, routeSheet, "Rutas");
+      }
+      const notesSheet = XLSX.utils.json_to_sheet([{ "Notas del proyecto": projectNotes || "Sin notas" }]);
+      XLSX.utils.book_append_sheet(wb, notesSheet, "Notas");
+      XLSX.writeFile(wb, "Dmast.xlsx");
+    }
+
+    function exportToKMZ() {
+      if (points.length === 0 && routes.length === 0) return alert("No hay datos.");
+      let kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<name>Dmast</name>
+<description><![CDATA[Notas del proyecto:<br>${projectNotes || 'Ninguna'}]]></description>
+`;
+      points.forEach(p => {
+        let desc = `<b>${p.nombre}</b><br>${p.comentario || ''}`;
+        if (p.image1) desc += `<br><img src="${p.image1}" width="120">`;
+        if (p.image2) desc += `<br><img src="${p.image2}" width="120">`;
+        kml += `<Placemark><name>${p.nombre} (${TIPOS[p.type]?.label || p.type})</name>
+<description><![CDATA[${desc}]]></description>
+<Point><coordinates>${p.lng},${p.lat},0</coordinates></Point></Placemark>`;
+      });
+      routes.forEach(r => {
+        let coords = r.polyline.getLatLngs().map(ll => `${ll.lng},${ll.lat},0`).join(' ');
+        kml += `<Placemark><name>${r.name} (${r.distance} m)</name>
+<LineString><coordinates>${coords}</coordinates></LineString></Placemark>`;
+      });
+      kml += `</Document></kml>`;
+      const zip = new JSZip();
+      zip.file("doc.kml", kml);
+      zip.generateAsync({ type: "blob" }).then(blob => saveAs(blob, "Dmast.kmz"));
+    }
+
+    window.onload = () => {
+      initMap();
+      renderPointsTable();
+      renderRoutesTable();
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!isSecure) {
+        updateStatusBar(`
+          ⚠️ <strong>Ubicación GPS desactivada</strong><br>
+          Usa <strong>GitHub Pages</strong> (HTTPS) para activarla en móvil.
+        `);
+        document.getElementById('statusBar').className = "status alert-warning";
+      }
+    };
+  </script>
+</body>
+</html>
